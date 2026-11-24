@@ -11,3 +11,9 @@ modeus:
   zone-id: Asia/Yekaterinburg
   connect-timeout: 5s
   read-timeout: 20s
+  auth:
+    mode: ${MODEUS_AUTH_MODE:MANUAL}
+    username: ${MODEUS_USERNAME:}
+    password: ${MODEUS_PASSWORD:}
+    auth-url: https://urfu-auth.modeus.org
+    sso-url: https://sso.urfu.ru

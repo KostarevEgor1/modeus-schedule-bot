@@ -42,8 +42,8 @@ public class ModeusResponseMapper {
         for (JsonNode eventRoom : embedded.path("event-rooms")) {
             JsonNode room = rooms.get(linkId(eventRoom, "room"));
             if (room != null) {
-                String name = room.path("name").asText();
-                String address = room.path("building").path("address").asText();
+                String name = room.path("name").asText("");
+                String address = room.path("building").path("address").asText("");
                 String location = name.isBlank() ? address
                         : address.isBlank() ? name : name + ", " + address;
                 add(locations, linkId(eventRoom, "event"), location);
@@ -51,7 +51,7 @@ public class ModeusResponseMapper {
         }
         for (JsonNode location : embedded.path("event-locations")) {
             String eventId = location.path("eventId").asText(linkId(location, "event"));
-            add(locations, eventId, location.path("customLocation").asText());
+            add(locations, eventId, location.path("customLocation").asText(""));
         }
 
         Map<String, Lesson> lessons = new LinkedHashMap<>();
