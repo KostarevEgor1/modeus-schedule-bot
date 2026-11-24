@@ -1,7 +1,9 @@
 package ru.urfu.modeusbot.modeus;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Objects;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.http.MediaType;
@@ -13,9 +15,10 @@ import org.springframework.web.client.RestClientResponseException;
 import ru.urfu.modeusbot.auth.ModeusSession;
 import ru.urfu.modeusbot.auth.ModeusSessionProvider;
 import ru.urfu.modeusbot.config.ModeusProperties;
+import ru.urfu.modeusbot.schedule.ScheduleSource;
 
 @Component
-public class ModeusClient {
+public class ModeusClient implements ScheduleSource {
 
     private static final int PAGE_SIZE = 500;
 
@@ -33,15 +36,25 @@ public class ModeusClient {
     }
 
     public List<Lesson> getSchedule(LocalDate date) {
+        return getSchedule(date, date);
+    }
+
+    @Override
+    public List<Lesson> getSchedule(LocalDate firstDay, LocalDate lastDay) {
+        Objects.requireNonNull(firstDay, "Укажите начало периода.");
+        Objects.requireNonNull(lastDay, "Укажите конец периода.");
+        if (lastDay.isBefore(firstDay) || ChronoUnit.DAYS.between(firstDay, lastDay) >= 30) {
+            throw new IllegalArgumentException("Период расписания должен содержать от 1 до 30 дней.");
+        }
         ModeusSession session = sessions.getSession();
         try {
-            return getSchedule(date, session);
+            return getSchedule(firstDay, lastDay, session);
         } catch (RestClientResponseException exception) {
             // Retry one time only, and only after an authentication rejection in SSO mode.
             if (exception.getStatusCode().value() == 401 && sessions.canLoginAutomatically()) {
                 sessions.invalidate(session);
                 try {
-                    return getSchedule(date, sessions.getSession());
+                    return getSchedule(firstDay, lastDay, sessions.getSession());
                 } catch (RestClientResponseException retryException) {
                     throw apiError(retryException);
                 }
@@ -50,9 +63,9 @@ public class ModeusClient {
         }
     }
 
-    private List<Lesson> getSchedule(LocalDate date, ModeusSession session) {
-        var start = date.atStartOfDay(properties.zoneId());
-        var end = date.plusDays(1).atStartOfDay(properties.zoneId()).minusSeconds(1);
+    private List<Lesson> getSchedule(LocalDate firstDay, LocalDate lastDay, ModeusSession session) {
+        var start = firstDay.atStartOfDay(properties.zoneId());
+        var end = lastDay.plusDays(1).atStartOfDay(properties.zoneId());
         var request = new ScheduleRequest(PAGE_SIZE, start.toOffsetDateTime().toString(),
                 end.toOffsetDateTime().toString(), List.of(session.personId()));
         JsonNode response = null;
@@ -79,11 +92,10 @@ public class ModeusClient {
                 throw new ModeusException("Не удалось прочитать ответ Modeus.");
             }
         }
-        var lessons = mapper.toLessons(response);
-        if (lessons.size() >= PAGE_SIZE) {
+        if (response != null && response.path("_embedded").path("events").size() >= PAGE_SIZE) {
             throw new ModeusException("Ответ достиг ограничения в 500 занятий; нужна поддержка пагинации.");
         }
-        return lessons;
+        return mapper.toLessons(response);
     }
 
     private ModeusException apiError(RestClientResponseException exception) {
