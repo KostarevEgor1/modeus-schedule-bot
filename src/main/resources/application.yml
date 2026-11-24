@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: modeus-schedule-bot
+  main:
+    web-application-type: none
+
+modeus:
+  base-url: https://urfu.modeus.org
+  token: ${MODEUS_TOKEN:}
+  person-id: ${MODEUS_PERSON_ID:}
+  zone-id: Asia/Yekaterinburg
+  connect-timeout: 5s
+  read-timeout: 20s
