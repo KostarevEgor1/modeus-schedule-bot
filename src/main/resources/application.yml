@@ -4,6 +4,15 @@ spring:
   main:
     web-application-type: none
 
+telegram:
+  bot:
+    enabled: ${TELEGRAM_BOT_ENABLED:false}
+    token: ${TELEGRAM_BOT_TOKEN:}
+    username: ${TELEGRAM_BOT_USERNAME:}
+
+telegrambots:
+  enabled: ${telegram.bot.enabled}
+
 modeus:
   base-url: https://urfu.modeus.org
   token: ${MODEUS_TOKEN:}
