@@ -3,12 +3,15 @@ package ru.urfu.modeusbot.auth;
 import java.io.IOException;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
+import java.net.ConnectException;
+import java.net.UnknownHostException;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -16,6 +19,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import javax.net.ssl.SSLException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
@@ -55,12 +61,12 @@ public class ModeusSsoAuthenticator {
         }
     }
 
-    // Separate transport allows checking the flow without real university credentials.
     ModeusSession login(HttpClient client) {
         try {
             URI configUri = properties.baseUrl().resolve("/schedule-calendar/assets/app.config.json");
             var configResponse = send(client, configUri, null);
-            String clientId = json.readTree(configResponse.body()).path("wso").path("clientId").asText("");
+            var config = json.readTree(configResponse.body());
+            String clientId = config == null ? "" : config.path("wso").path("clientId").asText("");
             if (clientId.isBlank()) {
                 throw new ModeusException("Modeus не вернул clientId в конфигурации приложения.");
             }
@@ -140,15 +146,15 @@ public class ModeusSsoAuthenticator {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new ModeusException("Вход в Modeus прерван.");
-        } catch (IOException exception) {
-            throw new ModeusException("Не удалось получить ответ при входе в Modeus. Проверьте сеть.");
+        } catch (JsonProcessingException exception) {
+            throw new ModeusException("Modeus вернул конфигурацию приложения в неожиданном формате вместо JSON.");
         } catch (IllegalArgumentException exception) {
             throw new ModeusException("Modeus вернул некорректные данные авторизации.");
         }
     }
 
     private HttpResponse<String> send(HttpClient client, URI uri, Map<String, String> fields)
-            throws IOException, InterruptedException {
+            throws InterruptedException {
         requireTrusted(uri);
         var builder = HttpRequest.newBuilder(uri).timeout(properties.readTimeout())
                 .header("User-Agent", "Mozilla/5.0 ModeusScheduleBot/0.0.1");
@@ -158,12 +164,48 @@ public class ModeusSsoAuthenticator {
             builder.header("Content-Type", "application/x-www-form-urlencoded")
                     .POST(HttpRequest.BodyPublishers.ofString(encode(fields)));
         }
-        var response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response;
+        try {
+            response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        } catch (IOException exception) {
+            throw networkError(uri, fields, exception);
+        }
         if (response.statusCode() >= 400) {
             throw new ModeusException("Сервер авторизации вернул HTTP " + response.statusCode()
                     + ". Проверьте данные входа и доступность SSO.");
         }
         return response;
+    }
+
+    private ModeusException networkError(URI uri, Map<String, String> fields, IOException exception) {
+        String stage = uri.getPath().equals("/schedule-calendar/assets/app.config.json")
+                ? "загрузка конфигурации Modeus"
+                : fields == null ? "получение страницы авторизации"
+                : fields.containsKey("Password") ? "отправка формы входа УрФУ"
+                : fields.containsKey("SAMLResponse") ? "передача SAML-ответа в Modeus"
+                : "отправка формы авторизации";
+        String reason = "ошибка ввода-вывода";
+        Throwable cause = exception;
+        for (int depth = 0; cause != null && depth < 10; depth++, cause = cause.getCause()) {
+            if (cause instanceof HttpTimeoutException) {
+                reason = "превышено время ожидания ответа или соединения";
+                break;
+            }
+            if (cause instanceof SSLException) {
+                reason = "не удалось установить защищённое TLS-соединение";
+                break;
+            }
+            if (cause instanceof UnknownHostException
+                    || cause instanceof java.nio.channels.UnresolvedAddressException) {
+                reason = "не удалось определить IP-адрес сервера";
+                break;
+            }
+            if (cause instanceof ConnectException) {
+                reason = "не удалось установить соединение с сервером";
+            }
+        }
+        return new ModeusException("Ошибка входа: " + stage + ". Сервер: " + uri.getHost()
+                + ". Причина: " + reason + " [" + exception.getClass().getSimpleName() + "].");
     }
 
     private ModeusSession readSession(URI uri, URI callback, String state, String nonce) {

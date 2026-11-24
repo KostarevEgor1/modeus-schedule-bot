@@ -32,7 +32,7 @@ try {
     $env:TELEGRAM_BOT_USERNAME = $telegramUsername.Trim().TrimStart('@')
     $env:TELEGRAM_BOT_TOKEN = [System.Net.NetworkCredential]::new('', $telegramSecret).Password
 
-    & $javaExecutable -jar $jarPath --modeus.check=false
+    & $javaExecutable '-Djava.net.useSystemProxies=true' -jar $jarPath --modeus.check=false
 } finally {
     foreach ($name in $previousValues.Keys) {
         [Environment]::SetEnvironmentVariable($name, $previousValues[$name], 'Process')
