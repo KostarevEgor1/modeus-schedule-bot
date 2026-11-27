@@ -4,9 +4,7 @@ import java.net.URI;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -22,8 +20,14 @@ public class ModeusResponseMapper {
         }
         JsonNode embedded = response.path("_embedded");
         JsonNode events = embedded.path("events");
+        if (events.isMissingNode()) {
+            return List.of();
+        }
         if (!events.isArray()) {
-            throw new ModeusException("Некорректный ответ Modeus: отсутствует массив events.");
+            throw new ModeusException("Некорректный ответ Modeus: поле events должно быть массивом.");
+        }
+        if (events.isEmpty()) {
+            return List.of();
         }
         var courses = index(embedded.path("course-unit-realizations"));
         var persons = index(embedded.path("persons"));
@@ -35,7 +39,7 @@ public class ModeusResponseMapper {
             if ("TEACH".equals(attendee.path("roleId").asText())) {
                 JsonNode person = persons.get(linkId(attendee, "person"));
                 if (person != null) {
-                    add(teachers, linkId(attendee, "event"), person.path("fullName").asText());
+                    add(teachers, linkId(attendee, "event"), person.path("fullName").asText(""));
                 }
             }
         }
@@ -50,38 +54,47 @@ public class ModeusResponseMapper {
             }
         }
         for (JsonNode location : embedded.path("event-locations")) {
-            String eventId = location.path("eventId").asText(linkId(location, "event"));
+            String eventId = location.path("eventId").asText("");
+            if (eventId.isBlank()) {
+                eventId = linkId(location, "event");
+            }
             add(locations, eventId, location.path("customLocation").asText(""));
         }
 
-        Map<String, Lesson> lessons = new LinkedHashMap<>();
+        List<Lesson> lessons = new ArrayList<>();
         try {
             for (JsonNode event : events) {
-                String id = event.path("id").asText();
+                String id = event.path("id").asText("");
                 if (id.isBlank()) {
                     throw new ModeusException("Некорректный ответ Modeus: занятие без идентификатора.");
                 }
                 JsonNode course = courses.get(linkId(event, "course-unit-realization"));
-                String title = course == null ? "" : course.path("name").asText();
+                String title = course == null ? "" : course.path("name").asText("");
                 if (title.isBlank()) {
-                    title = event.path("name").asText("Занятие");
+                    title = event.path("name").asText("");
                 }
-                lessons.putIfAbsent(id, new Lesson(id, title,
+                if (title.isBlank()) {
+                    title = "Занятие";
+                }
+                lessons.add(new Lesson(id, title,
                         OffsetDateTime.parse(event.path("start").asText()),
                         OffsetDateTime.parse(event.path("end").asText()),
-                        event.path("typeId").asText(),
+                        event.path("typeId").asText(""),
                         teachers.getOrDefault(id, List.of()), locations.getOrDefault(id, List.of())));
             }
         } catch (DateTimeParseException exception) {
             throw new ModeusException("Некорректный ответ Modeus: невозможно прочитать время занятия.");
         }
-        return lessons.values().stream().sorted(Comparator.comparing(Lesson::start)).toList();
+        return List.copyOf(lessons);
     }
 
     private Map<String, JsonNode> index(JsonNode items) {
         Map<String, JsonNode> result = new HashMap<>();
         for (JsonNode item : items) {
-            result.put(item.path("id").asText(), item);
+            String id = item.path("id").asText("");
+            if (!id.isBlank()) {
+                result.put(id, item);
+            }
         }
         return result;
     }
@@ -91,12 +104,16 @@ public class ModeusResponseMapper {
         if (link.isArray()) {
             link = link.path(0);
         }
-        String href = link.path("href").asText();
+        String href = link.path("href").asText("");
         if (href.isBlank()) {
             return "";
         }
         try {
-            String path = URI.create(href).getPath().replaceAll("/+$", "");
+            String path = URI.create(href).getPath();
+            if (path == null || path.isBlank()) {
+                throw new IllegalArgumentException();
+            }
+            path = path.replaceAll("/+$", "");
             return path.substring(path.lastIndexOf('/') + 1);
         } catch (IllegalArgumentException exception) {
             throw new ModeusException("Некорректная ссылка на связанную сущность Modeus.");

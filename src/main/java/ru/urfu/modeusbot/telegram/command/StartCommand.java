@@ -11,12 +11,10 @@ public class StartCommand implements BotCommand {
     }
 
     @Override
-    public String execute(String arguments) {
+    public String execute() {
         return """
                 Привет! Я помощник по расписанию Modeus УрФУ.
-                Пока доступны знакомство и справка. Просмотр расписания появится на следующем этапе.
-
-                /help — список доступных команд.
+                /today — пары на сегодня. Все команды — /help.
                 """;
     }
 }

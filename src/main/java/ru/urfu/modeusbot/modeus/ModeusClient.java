@@ -35,10 +35,6 @@ public class ModeusClient implements ScheduleSource {
         this.sessions = sessions;
     }
 
-    public List<Lesson> getSchedule(LocalDate date) {
-        return getSchedule(date, date);
-    }
-
     @Override
     public List<Lesson> getSchedule(LocalDate firstDay, LocalDate lastDay) {
         Objects.requireNonNull(firstDay, "Укажите начало периода.");
@@ -50,7 +46,6 @@ public class ModeusClient implements ScheduleSource {
         try {
             return getSchedule(firstDay, lastDay, session);
         } catch (RestClientResponseException exception) {
-            // Retry one time only, and only after an authentication rejection in SSO mode.
             if (exception.getStatusCode().value() == 401 && sessions.canLoginAutomatically()) {
                 sessions.invalidate(session);
                 try {

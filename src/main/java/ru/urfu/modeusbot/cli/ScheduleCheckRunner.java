@@ -55,10 +55,9 @@ public class ScheduleCheckRunner implements ApplicationRunner {
                     : "В выбранном периоде занятий нет.");
         }
         for (var lesson : lessons) {
-            var start = lesson.start().atZoneSameInstant(properties.zoneId()).toLocalTime();
+            var start = lesson.start().atZoneSameInstant(properties.zoneId());
             var end = lesson.end().atZoneSameInstant(properties.zoneId()).toLocalTime();
-            var lessonDate = lesson.start().atZoneSameInstant(properties.zoneId()).toLocalDate();
-            System.out.printf("%s %s–%s %s%n", lessonDate, start, end, lesson.title());
+            System.out.printf("%s %s–%s %s%n", start.toLocalDate(), start.toLocalTime(), end, lesson.title());
             if (!lesson.teachers().isEmpty()) {
                 System.out.println("Преподаватели: " + String.join("; ", lesson.teachers()));
             }

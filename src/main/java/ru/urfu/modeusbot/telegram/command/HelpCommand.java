@@ -11,13 +11,15 @@ public class HelpCommand implements BotCommand {
     }
 
     @Override
-    public String execute(String arguments) {
+    public String execute() {
         return """
                 Доступные команды:
-                /start — знакомство с ботом;
-                /help — справка.
-
-                Команды расписания пока не подключены.
+                /today — пары на сегодня
+                /tomorrow — пары на завтра
+                /week — расписание текущей недели
+                /next — ближайшая пара в пределах семи дней, включая сегодня
+                /id — свой Telegram ID
+                /help — эта справка
                 """;
     }
 }

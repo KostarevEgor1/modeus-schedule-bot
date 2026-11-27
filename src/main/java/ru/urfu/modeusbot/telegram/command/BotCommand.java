@@ -4,5 +4,5 @@ public interface BotCommand {
 
     String name();
 
-    String execute(String arguments);
+    String execute();
 }

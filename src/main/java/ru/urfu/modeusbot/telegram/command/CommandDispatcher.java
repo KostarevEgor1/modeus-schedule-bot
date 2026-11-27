@@ -30,9 +30,7 @@ public class CommandDispatcher {
         if (text == null || text.isBlank()) {
             return Optional.of(unknownCommand());
         }
-        String[] parts = text.strip().split("\\s+", 2);
-        String name = parts[0].toLowerCase(Locale.ROOT);
-        String arguments = parts.length == 2 ? parts[1] : "";
+        String name = text.strip().split("\\s+", 2)[0].toLowerCase(Locale.ROOT);
         int mention = name.indexOf('@');
         if (name.startsWith("/") && mention >= 0) {
             if (!name.substring(mention + 1).equalsIgnoreCase(botUsername)) {
@@ -41,7 +39,7 @@ public class CommandDispatcher {
             name = name.substring(0, mention);
         }
         BotCommand command = commands.get(name);
-        return Optional.of(command == null ? unknownCommand() : command.execute(arguments));
+        return Optional.of(command == null ? unknownCommand() : command.execute());
     }
 
     private String unknownCommand() {
